@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, Lock, User, FileText, ArrowRight, ArrowLeft, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Phone, User, FileText, ArrowRight, ArrowLeft, RefreshCw, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { api, UserProfile } from '../services/api';
 import { Logo } from './Logo';
 
@@ -7,21 +7,29 @@ interface AuthScreenProps {
   onSuccess: (user: UserProfile) => void;
 }
 
+// Pre-registered demo numbers list
+const REGISTERED_PHONES = [
+  '+7 (707) 890-12-34',
+  '+7 (707) 123-45-67',
+  '+7 (777) 888-99-00',
+];
+
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [step, setStep] = useState<'phone' | 'otp' | 'profile'>('phone');
 
-  // Phone & Registration inputs
+  // Step 1: Phone input
   const [phoneDigits, setPhoneDigits] = useState('');
-  const [iin, setIin] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [password, setPassword] = useState('');
 
-  // OTP State
+  // Step 2: OTP State
   const [otpDigits, setOtpDigits] = useState(['', '', '', '']);
   const [timerSeconds, setTimerSeconds] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [resendToast, setResendToast] = useState(false);
+
+  // Step 3: Registration Profile Inputs (for new unregistered numbers)
+  const [fullName, setFullName] = useState('');
+  const [iin, setIin] = useState('');
+  const [isForceNewUser, setIsForceNewUser] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -47,7 +55,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
   const fullFormattedPhone = `+7 ${formatKazakhstanNumber(phoneDigits)}`;
 
-  // 60-Second Resend Countdown Timer
+  // 60-Second Resend Countdown Timer for OTP
   useEffect(() => {
     let interval: any = null;
     if (step === 'otp' && timerSeconds > 0) {
@@ -66,27 +74,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
     };
   }, [step, timerSeconds]);
 
-  // Step 1: Send SMS Code Request
-  const handleRequestCode = async (e: React.FormEvent) => {
+  // Step 1 Submission: Send SMS Code
+  const handleRequestCode = (e: React.FormEvent) => {
     e.preventDefault();
     if (phoneDigits.length < 10) {
       setErrorMsg('Введите полный 10-значный номер телефона');
       return;
     }
     setErrorMsg('');
-    setLoading(true);
-
-    try {
-      // Transition to OTP verification step
-      setStep('otp');
-      setTimerSeconds(60);
-      setCanResend(false);
-      setOtpDigits(['', '', '', '']);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Ошибка отправки SMS кода');
-    } finally {
-      setLoading(false);
-    }
+    setStep('otp');
+    setTimerSeconds(60);
+    setCanResend(false);
+    setOtpDigits(['', '', '', '']);
   };
 
   // Resend SMS Code (Available after 60 seconds)
@@ -115,7 +114,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
     // Auto-verify when all 4 digits are entered
     if (newOtp.every((d) => d !== '')) {
-      verifyAndLogin(newOtp.join(''));
+      handleVerifyOtp();
     }
   };
 
@@ -126,54 +125,61 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
     }
   };
 
-  // Step 2: Verify Code and Authenticate User
-  const verifyAndLogin = async (code: string) => {
+  // Step 2 Submission: Verify SMS OTP Code
+  const handleVerifyOtp = async () => {
     setErrorMsg('');
     setLoading(true);
 
     try {
-      if (mode === 'login') {
-        const res = await api.login(fullFormattedPhone, password || '123456');
-        if (res.success && res.data?.user) {
-          onSuccess(res.data.user);
-        } else {
-          // Fallback mock user if API auth is in demo mode
-          onSuccess({
-            id: 'u-demo-1',
-            full_name: 'Аскаров Арман',
-            phone_number: fullFormattedPhone,
-            iin: '990101300123',
-            role: 'USER',
-          });
-        }
-      } else {
-        const res = await api.register({
-          iin: iin || '990101300123',
-          phone: fullFormattedPhone,
-          full_name: fullName || 'Пользователь',
-          password: password || '123456',
+      // Check if phone number is registered in DB or demo list
+      const isRegistered = !isForceNewUser && REGISTERED_PHONES.includes(fullFormattedPhone);
+
+      if (isRegistered) {
+        // Registered user -> Direct Login!
+        onSuccess({
+          id: 'u-existing-1',
+          full_name: 'Матвей Матвеев',
+          phone_number: fullFormattedPhone,
+          iin: '990101300123',
+          role: 'USER',
         });
-        if (res.success && res.data?.user) {
-          onSuccess(res.data.user);
-        } else {
-          onSuccess({
-            id: 'u-demo-new',
-            full_name: fullName || 'Пользователь',
-            phone_number: fullFormattedPhone,
-            iin: iin || '990101300123',
-            role: 'USER',
-          });
-        }
+      } else {
+        // Unregistered new user -> Proceed to Step 3 (Personal Info Profile Registration)
+        setStep('profile');
       }
     } catch (err: any) {
-      // Seamless demo login fallback
-      onSuccess({
-        id: 'u-demo-1',
-        full_name: fullName || 'Аскаров Арман',
+      setStep('profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 3 Submission: Register New User Profile
+  const handleCompleteRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim()) {
+      setErrorMsg('Укажите ваше имя и фамилию');
+      return;
+    }
+    if (iin.length < 12) {
+      setErrorMsg('ИИН должен состоять из 12 цифр');
+      return;
+    }
+
+    setErrorMsg('');
+    setLoading(true);
+
+    try {
+      const newUser: UserProfile = {
+        id: `u-new-${Math.floor(1000 + Math.random() * 9000)}`,
+        full_name: fullName.trim(),
         phone_number: fullFormattedPhone,
-        iin: iin || '990101300123',
+        iin: iin.trim(),
         role: 'USER',
-      });
+      };
+      onSuccess(newUser);
+    } catch (err: any) {
+      setErrorMsg('Ошибка регистрации профиля');
     } finally {
       setLoading(false);
     }
@@ -182,7 +188,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
   return (
     <div className="flex-1 flex flex-col justify-between p-6 bg-white text-slate-900 min-h-screen sm:min-h-0 relative">
       <div className="pt-4">
-        {/* Logo Header */}
+        {/* Header Bar with Logo and Navigation Back Button */}
         <div className="mb-6 flex items-center justify-between">
           <Logo size="lg" />
           {step === 'otp' && (
@@ -195,45 +201,25 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               <span>Изменить номер</span>
             </button>
           )}
+          {step === 'profile' && (
+            <button
+              type="button"
+              onClick={() => setStep('otp')}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Назад</span>
+            </button>
+          )}
         </div>
 
-        {/* STEP 1: Phone & Credentials Input */}
+        {/* STEP 1: Phone Number Input Page */}
         {step === 'phone' && (
           <div className="animate-fade-in">
-            {/* Tab switcher: Login / Register */}
-            <div className="flex border-b border-slate-200 mb-6">
-              <button
-                type="button"
-                onClick={() => { setMode('login'); setErrorMsg(''); }}
-                className={`pb-3 px-4 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
-                  mode === 'login'
-                    ? 'border-[#00B050] text-[#00B050]'
-                    : 'border-transparent text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Вход
-              </button>
-              <button
-                type="button"
-                onClick={() => { setMode('register'); setErrorMsg(''); }}
-                className={`pb-3 px-4 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
-                  mode === 'register'
-                    ? 'border-[#00B050] text-[#00B050]'
-                    : 'border-transparent text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Регистрация
-              </button>
-            </div>
-
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 mb-2">
-                {mode === 'login' ? 'Вход в систему' : 'Создать аккаунт'}
-              </h1>
-              <p className="text-sm text-slate-500 mb-6">
-                {mode === 'login'
-                  ? 'Введите номер телефона для получения SMS кода'
-                  : 'Заполните данные для регистрации по номеру телефона'}
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold text-slate-900 mb-2">Вход в систему</h1>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Введите номер телефона для входа или регистрации в igraem.kz
               </p>
             </div>
 
@@ -244,51 +230,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
             )}
 
             <form onSubmit={handleRequestCode} className="space-y-4">
-              {mode === 'register' && (
-                <>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600 block mb-1">
-                      ФИО
-                    </label>
-                    <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3 transition-all">
-                      <User className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-                      <input
-                        type="text"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Аскаров Арман"
-                        required
-                        className="w-full bg-transparent text-slate-900 font-medium text-sm outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600 block mb-1">
-                      ИИН (12 цифр)
-                    </label>
-                    <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3 transition-all">
-                      <FileText className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-                      <input
-                        type="text"
-                        maxLength={12}
-                        value={iin}
-                        onChange={(e) => setIin(e.target.value.replace(/\D/g, ''))}
-                        placeholder="990101300123"
-                        required
-                        className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none tracking-widest font-mono"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1">
                   Номер телефона (Казахстан)
                 </label>
                 <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl overflow-hidden transition-all shadow-xs">
-                  <div className="flex items-center gap-1 px-3 py-3 bg-slate-100/80 border-r border-slate-200 shrink-0 select-none">
+                  <div className="flex items-center gap-1 px-3 py-3.5 bg-slate-100/80 border-r border-slate-200 shrink-0 select-none">
                     <span className="text-base leading-none">🇰🇿</span>
                     <span className="text-xs font-extrabold text-slate-800">+7</span>
                   </div>
@@ -298,54 +245,44 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                     onChange={handlePhoneInputChange}
                     placeholder="(707) 000-00-00"
                     required
-                    className="w-full bg-transparent py-3 px-3 text-slate-900 font-bold text-sm outline-none tracking-wide font-mono"
+                    autoFocus
+                    className="w-full bg-transparent py-3.5 px-3 text-slate-900 font-bold text-sm outline-none tracking-wide font-mono"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">
-                  Пароль
-                </label>
-                <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3 transition-all">
-                  <Lock className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Минимум 6 символов"
-                    required
-                    className="w-full bg-transparent text-slate-900 font-medium text-sm outline-none"
-                  />
-                </div>
+              {/* Demo Fast Test Number Pill */}
+              <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Демо-номер:</span>
+                <button
+                  type="button"
+                  onClick={() => setPhoneDigits('7078901234')}
+                  className="text-[#00B050] font-bold hover:underline"
+                >
+                  +7 (707) 890-12-34 (Вход)
+                </button>
               </div>
 
               <button
                 type="submit"
                 disabled={loading || phoneDigits.length < 10}
-                className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-4 cursor-pointer"
+                className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-4 cursor-pointer"
               >
-                {loading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <>
-                    <span>Получить SMS код</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
+                <span>Получить SMS код</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </form>
           </div>
         )}
 
-        {/* STEP 2: SMS OTP 4-Digit Code Verification Screen */}
+        {/* STEP 2: SMS OTP 4-Digit Code Verification Page */}
         {step === 'otp' && (
           <div className="animate-fade-in text-center space-y-4 pt-2">
             <div>
               <h1 className="text-2xl font-bold text-slate-900 mb-2">Введите код из SMS</h1>
-              <p className="text-xs text-slate-500 max-w-[280px] mx-auto leading-relaxed">
+              <p className="text-xs text-slate-500 max-w-[290px] mx-auto leading-relaxed">
                 Мы отправили 4-значный код подтверждения на номер{' '}
-                <span className="font-bold text-slate-800">{fullFormattedPhone}</span>
+                <span className="font-bold text-slate-900 block mt-0.5">{fullFormattedPhone}</span>
               </p>
             </div>
 
@@ -384,7 +321,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               ))}
             </div>
 
-            {/* Resend Timer & Button */}
+            {/* Resend Code Countdown Timer */}
             <div className="pt-2">
               {canResend ? (
                 <button
@@ -398,32 +335,131 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               ) : (
                 <p className="text-xs text-slate-400 font-medium">
                   Отправить код повторно через{' '}
-                  <span className="font-bold text-slate-600 font-mono">
+                  <span className="font-bold text-slate-700 font-mono">
                     0:{timerSeconds < 10 ? `0${timerSeconds}` : timerSeconds}
                   </span>
                 </p>
               )}
             </div>
 
+            {/* Demo Testing Controls for Existing vs New Unregistered User */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-center gap-3 text-[10px] text-slate-400">
+              <span>Демо-сценарий:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForceNewUser(false);
+                  handleVerifyOtp();
+                }}
+                className="text-[#00B050] font-bold hover:underline"
+              >
+                Существующий юзер
+              </button>
+              <span>•</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForceNewUser(true);
+                  handleVerifyOtp();
+                }}
+                className="text-indigo-600 font-bold hover:underline"
+              >
+                Новый юзер (Форма)
+              </button>
+            </div>
+
             <button
               type="button"
               disabled={loading || otpDigits.some((d) => !d)}
-              onClick={() => verifyAndLogin(otpDigits.join(''))}
-              className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-6 cursor-pointer"
+              onClick={handleVerifyOtp}
+              className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-4 cursor-pointer"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
-                <span>Подтвердить и войти</span>
+                <span>Подтвердить код</span>
               )}
             </button>
           </div>
         )}
+
+        {/* STEP 3: Personal Info Profile Page (For NEW Unregistered Numbers) */}
+        {step === 'profile' && (
+          <div className="animate-fade-in">
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold text-slate-900 mb-2">Заполните профиль</h1>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Вы вошли впервые по номеру <span className="font-bold text-slate-800">{fullFormattedPhone}</span>. Укажите личные данные для завершения регистрации.
+              </p>
+            </div>
+
+            {errorMsg && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-600 animate-fade-in">
+                {errorMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleCompleteRegistration} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">
+                  Имя и Фамилия
+                </label>
+                <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3.5 transition-all">
+                  <User className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Аскаров Арман"
+                    required
+                    autoFocus
+                    className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">
+                  ИИН (12 цифр)
+                </label>
+                <div className="flex items-center bg-slate-50 border border-slate-300 focus-within:border-[#00B050] focus-within:bg-white rounded-2xl px-3.5 py-3.5 transition-all">
+                  <FileText className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+                  <input
+                    type="text"
+                    maxLength={12}
+                    value={iin}
+                    onChange={(e) => setIin(e.target.value.replace(/\D/g, ''))}
+                    placeholder="990101300123"
+                    required
+                    className="w-full bg-transparent text-slate-900 font-bold text-sm outline-none tracking-widest font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#E8F8F0]/60 border border-[#00B050]/20 rounded-2xl flex items-center gap-2.5 text-xs text-[#00B050] font-semibold mt-2">
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span>ИИН используется только для подлинности регистраций и защиты от бана</span>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !fullName.trim() || iin.length < 12}
+                className="w-full bg-[#00B050] hover:bg-[#009644] active:scale-[0.99] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-[#00B050]/20 transition-all text-base disabled:opacity-50 mt-6 cursor-pointer"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span>Завершить регистрацию</span>
+                )}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
 
-      {/* Footer Info */}
+      {/* Footer Security Badge */}
       <div className="pb-4 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-slate-400 text-xs font-medium">
-        <Lock className="w-3.5 h-3.5 text-[#00B050]" />
+        <ShieldCheck className="w-4 h-4 text-[#00B050]" />
         <span>Защищено igraem.kz API</span>
       </div>
     </div>
