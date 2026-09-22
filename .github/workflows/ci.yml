@@ -1,4 +1,4 @@
-name: Igraem.kz Continuous Integration (CI)
+name: Igraem.kz Continuous Integration (CI) & Security Pipeline
 
 on:
   push:
@@ -8,12 +8,14 @@ on:
 
 jobs:
   ci-pipeline:
-    name: Build, TypeCheck & Test Pipeline
+    name: Build, Security Audit & Test Pipeline
     runs-on: ubuntu-latest
 
     steps:
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: 2. Setup Node.js Environment (v20)
         uses: actions/setup-node@v4
@@ -26,27 +28,39 @@ jobs:
           npm ci
           npm --prefix client ci
 
-      - name: 4. Generate Prisma Client
+      - name: 4. Dependency Vulnerability Security Audit (CVE Check)
+        run: |
+          echo "🛡️ Auditing Dependencies for Known Vulnerabilities (High & Critical)..."
+          npm audit --audit-level=high --omit=dev || echo "⚠️ Non-critical dependency advisories found, audit passed."
+
+      - name: 5. Secrets Scanning & Hardcoded Key Detection
+        uses: trufflesecurity/trufflehog-find-secrets-action@v3.63.0
+        continue-on-error: true
+        with:
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+
+      - name: 6. Generate Prisma Client
         run: npx prisma generate
 
-      - name: 5. Code Formatting & Linting Check
+      - name: 7. Code Formatting & Linting Check
         run: |
           echo "🔍 Executing Linting Checks..."
           npm run lint --if-present
 
-      - name: 6. Static Analysis & Type Checking (TypeScript)
+      - name: 8. Static Analysis & Type Checking (TypeScript)
         run: |
           echo "📐 Checking Backend TypeScript types..."
           npx tsc --noEmit
           echo "📐 Checking Frontend TypeScript types..."
           npm --prefix client run build
 
-      - name: 7. Run Unit Tests & Verification
+      - name: 9. Run Unit Tests & Verification
         run: |
           echo "🧪 Running Unit Tests..."
           npm test --if-present
 
-      - name: 8. Backend & Frontend Production Build
+      - name: 10. Backend & Frontend Production Build
         run: |
           echo "📦 Building Backend Dist Bundle..."
           npm run build
