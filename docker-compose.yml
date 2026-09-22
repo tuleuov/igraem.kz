@@ -19,16 +19,17 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
+  api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sports_ground_app
+    container_name: sports_ground_api
     restart: always
     ports:
       - "3000:3000"
     environment:
       PORT: 3000
+      NODE_ENV: production
       DATABASE_URL: "postgresql://postgres:postgrespassword@db:5432/sharing_ploshadka_db?schema=public"
       JWT_SECRET: "super-secret-jwt-key-sharing-ploshadka-2026"
       JWT_EXPIRES_IN: "7d"

@@ -28,12 +28,25 @@
 * Node.js v20+
 * Docker & Docker Compose (опционально)
 
-### 2. Запуск в один клик через Docker
+### 2. Быстрый старт через Docker (Docker & Docker Compose)
+
+Сборка многоэтапного образа (Multi-stage build) и запуск связки PostgreSQL 16 + API Backend & Web Frontend:
 
 ```bash
-docker-compose up --build -d
+# Запуск контейнеров в фоновом режиме со сборкой
+docker compose up --build -d
+
+# Просмотр логов приложения и состояния базы данных
+docker compose logs -f api
+
+# Проверка здоровья системы (Healthcheck)
+curl http://localhost:3000/health
+
+# Остановка и удаление контейнеров
+docker compose down
 ```
-Приложение откроется по адресу `http://localhost:5173/` (или `http://localhost:3000/`).
+
+Приложение доступно по адресу `http://localhost:3000/` (проверка здоровья: `http://localhost:3000/health`).
 
 ### 3. Запуск локально для разработки
 
