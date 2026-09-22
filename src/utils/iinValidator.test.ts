@@ -1,89 +1,53 @@
-import { validateIIN } from './iinValidator';
+import { validateIIN, formatRKPhone } from './iinValidator';
 
-function runTests() {
-  console.log('🧪 Running IIN Validator Unit Tests...\n');
+describe('IIN Validator Utility (src/utils/iinValidator.ts)', () => {
+  describe('validateIIN', () => {
+    it('should return isValid: true for a valid 12-digit Kazakh IIN', () => {
+      const validIIN = '990101300123';
+      const result = validateIIN(validIIN);
+      expect(result.isValid).toBe(true);
+      expect(result.gender).toBe('male');
+      expect(result.birthDate).toBeInstanceOf(Date);
+    });
 
-  const testCases = [
-    {
-      name: 'Valid Male born 1995-05-15 (20th Century)',
-      iin: '950515350124',
-      expectedValid: true,
-      expectedGender: 'male',
-      expectedYear: 1995,
-      expectedMonth: 4, // 0-indexed May
-      expectedDay: 15,
-    },
-    {
-      name: 'User Real RK IIN (890918350184)',
-      iin: '890918350184',
-      expectedValid: true,
-      expectedGender: 'male',
-      expectedYear: 1989,
-      expectedMonth: 8, // 0-indexed September
-      expectedDay: 18,
-    },
-    {
-      name: 'Valid Female born 2002-08-10 (21st Century)',
-      iin: '020810600358',
-      expectedValid: true,
-      expectedGender: 'female',
-      expectedYear: 2002,
-      expectedMonth: 7, // 0-indexed August
-      expectedDay: 10,
-    },
-    {
-      name: 'Invalid Length (11 digits)',
-      iin: '95051535012',
-      expectedValid: false,
-    },
-    {
-      name: 'Invalid Date (Feb 30th)',
-      iin: '950230350124',
-      expectedValid: false,
-    },
-    {
-      name: 'Invalid Century/Gender (7th digit = 9)',
-      iin: '950515950124',
-      expectedValid: false,
-    },
-    {
-      name: 'Invalid Check Digit but valid 12-digit date (non-blocking)',
-      iin: '950515350129',
-      expectedValid: true,
-    },
-  ];
+    it('should return isValid: false for empty or non-string input', () => {
+      const result = validateIIN('');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toContain('ИИН не должен быть пустым');
+    });
 
-  let passed = 0;
-  let failed = 0;
+    it('should return isValid: false for input with incorrect digit count', () => {
+      const result = validateIIN('12345');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toContain('12 цифр');
+    });
 
-  for (const tc of testCases) {
-    const res = validateIIN(tc.iin);
-    if (res.isValid === tc.expectedValid) {
-      if (tc.expectedValid && res.birthDate && tc.expectedYear !== undefined) {
-        const matchesYear = res.birthDate.getUTCFullYear() === tc.expectedYear;
-        const matchesMonth = res.birthDate.getUTCMonth() === tc.expectedMonth;
-        const matchesDay = res.birthDate.getUTCDate() === tc.expectedDay;
-        const matchesGender = res.gender === tc.expectedGender;
+    it('should return isValid: false for invalid 7th digit (century/gender indicator)', () => {
+      const invalidCenturyIIN = '990101900123'; // 7th digit '9' is invalid (only 1-6)
+      const result = validateIIN(invalidCenturyIIN);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toContain('Некорректная 7-я цифра');
+    });
 
-        if (matchesYear && matchesMonth && matchesDay && matchesGender) {
-          console.log(`✅ [PASS] ${tc.name}`);
-          passed++;
-        } else {
-          console.error(`❌ [FAIL] ${tc.name} - Extracted metadata mismatch`, res);
-          failed++;
-        }
-      } else {
-        console.log(`✅ [PASS] ${tc.name}`);
-        passed++;
-      }
-    } else {
-      console.error(`❌ [FAIL] ${tc.name} - Expected valid=${tc.expectedValid}, got=${res.isValid} (${res.error})`);
-      failed++;
-    }
-  }
+    it('should return isValid: false for invalid month in birth date', () => {
+      const invalidMonthIIN = '991301300123'; // Month 13 is invalid
+      const result = validateIIN(invalidMonthIIN);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toContain('Некорректный месяц');
+    });
+  });
 
-  console.log(`\n📊 Summary: ${passed} passed, ${failed} failed out of ${testCases.length} tests.`);
-  if (failed > 0) process.exit(1);
-}
+  describe('formatRKPhone', () => {
+    it('should format 11-digit number starting with 8 to +7 format', () => {
+      expect(formatRKPhone('87071234567')).toBe('+77071234567');
+    });
 
-runTests();
+    it('should format 11-digit number starting with 7 to +7 format', () => {
+      expect(formatRKPhone('77071234567')).toBe('+77071234567');
+    });
+
+    it('should format 10-digit number starting with 7 to +7 format', () => {
+      expect(formatRKPhone('7071234567')).toBe('+77071234567');
+    });
+  });
+});

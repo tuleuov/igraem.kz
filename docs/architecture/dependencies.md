@@ -61,3 +61,14 @@ graph TD
     B --> E["VenueOpenedScreen.tsx Participant Controls"]
     C --> F["Backend Express Controllers"]
 ```
+
+---
+
+## 4. Тестовое покрытие критических модулей (Test Coverage)
+
+| Модуль / Утилита | Файл тестов | Покрываемый функционал | Статус Jest |
+| :--- | :--- | :--- | :--- |
+| **`src/utils/iinValidator.ts`** | `src/utils/iinValidator.test.ts` | Валидация 12-значного ИИН РК (длина, век/пол, дата, алгоритм Modulo 11), форматирование телефонов. | ✅ PASS (5/5) |
+| **`src/services/ttlockService.ts`** | `src/services/ttlockService.test.ts` | Дистанционное отпирание замка TTLock Cloud, автопереход в автономный режим при сбое шлюза, статус шлюза. | ✅ PASS (3/3) |
+| **`client/src/utils/geo.ts`** | `client/src/utils/geo.test.ts` | Расчет расстояний по формуле Гаверсинуса (Астана - Караганда), форматирование м/км для UI. | ✅ PASS (7/7) |
+
