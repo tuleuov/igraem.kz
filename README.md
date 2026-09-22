@@ -17,6 +17,9 @@
 * 🚀 **[Руководство по CI/CD и развертыванию (docs/CICD_GUIDE.md)](./docs/CICD_GUIDE.md)**  
   *Настройка пайплайнов GitHub Actions (CI & CD), сборка Docker-контейнеров, переменные окружения и регламент ветвления Git.*
 
+* 🤖 **[Правила и Регламент разработки AI-ассистента (docs/development/agent-guidelines.md)](./docs/development/agent-guidelines.md)**  
+  *Протокол Read-Before-Write, каскадные обновления, Doc-Sync, правила ветвления и Definition of Done.*
+
 ---
 
 ## 🛠️ Быстрый запуск
