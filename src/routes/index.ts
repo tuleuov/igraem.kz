@@ -5,14 +5,15 @@ import { BookingsController } from '../controllers/bookingsController';
 import { LocksController } from '../controllers/locksController';
 import { AdminController } from '../controllers/adminController';
 import { authenticateJwt, requireAdmin } from '../middlewares/authMiddleware';
+import { validateRequest, authRegisterSchema, authLoginSchema, createBookingSchema } from '../middlewares/securityMiddleware';
 import { validateIIN } from '../utils/iinValidator';
 
 const router = Router();
 
 // --- Auth & User Registration Routes ---
-router.post('/auth/register', AuthController.register as any);
-router.post('/users/register', AuthController.register as any);
-router.post('/auth/login', AuthController.login as any);
+router.post('/auth/register', validateRequest(authRegisterSchema), AuthController.register as any);
+router.post('/users/register', validateRequest(authRegisterSchema), AuthController.register as any);
+router.post('/auth/login', validateRequest(authLoginSchema), AuthController.login as any);
 router.get('/auth/me', authenticateJwt, AuthController.getMe as any);
 
 // --- IIN Validation Utility Endpoint ---
@@ -33,7 +34,7 @@ router.post('/grounds/:id/reviews', authenticateJwt, GroundsController.addReview
 // --- Bookings & Slot Management Routes ---
 router.get('/bookings/all', BookingsController.getAllBookings as any);
 router.get('/bookings/open-matchmaking', BookingsController.getOpenMatchmakingBookings as any);
-router.post('/bookings', authenticateJwt, BookingsController.createBooking as any);
+router.post('/bookings', authenticateJwt, validateRequest(createBookingSchema), BookingsController.createBooking as any);
 router.patch('/bookings/:id/matchmaking-settings', authenticateJwt, BookingsController.updateMatchmakingSettings as any);
 router.get('/bookings/my', authenticateJwt, BookingsController.getMyBookings as any);
 router.post('/bookings/:id/cancel', authenticateJwt, BookingsController.cancelBooking as any);
