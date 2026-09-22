@@ -2,12 +2,19 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import router from './routes';
+import { loggerMiddleware } from './middlewares/loggerMiddleware';
+import { errorHandler } from './middlewares/errorHandler';
+import { HealthController } from './controllers/healthController';
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(loggerMiddleware);
+
+// Dedicated root healthcheck endpoint
+app.get('/health', HealthController.checkHealth as any);
 
 // Dedicated route for Interactive Web Test & Admin Dashboard (TTLock Mock toggle, Gateways, IIN Validator, Akimat Dashboard)
 app.get(['/admin', '/dashboard', '/test-dashboard'], (req, res) => {
@@ -24,7 +31,7 @@ app.use('/api/v1', router);
 
 // SPA Fallback for non-API GET routes to serve React app
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) {
+  if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
     return next();
   }
   const indexHtml = path.join(clientDistPath, 'index.html');
@@ -35,14 +42,7 @@ app.get('*', (req, res, next) => {
   });
 });
 
-
-// Global Error Handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('[GlobalErrorHandler]', err);
-  res.status(500).json({
-    success: false,
-    message: err.message || 'Внутренняя ошибка сервера',
-  });
-});
+// Global Centralized Error Handler
+app.use(errorHandler);
 
 export default app;

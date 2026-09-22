@@ -4,10 +4,14 @@ import { GroundsController } from '../controllers/groundsController';
 import { BookingsController } from '../controllers/bookingsController';
 import { LocksController } from '../controllers/locksController';
 import { AdminController } from '../controllers/adminController';
+import { HealthController } from '../controllers/healthController';
 import { authenticateJwt, requireAdmin } from '../middlewares/authMiddleware';
 import { validateIIN } from '../utils/iinValidator';
 
 const router = Router();
+
+// --- Health Check Endpoint ---
+router.get('/health', HealthController.checkHealth as any);
 
 // --- Auth & User Registration Routes ---
 router.post('/auth/register', AuthController.register as any);
