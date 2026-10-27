@@ -14,4 +14,7 @@ app.listen(PORT, () => {
   // Initialize TTLock Gateway Health Cron Monitoring & Automated No-Show Worker
   CronService.initGatewayMonitoring();
   CronService.initNoShowAutoCheck();
+
+  // Сыграем: авто-переходы статусов заявок (каждые 5 мин)
+  CronService.initPlayProposalStatusTransitions();
 });

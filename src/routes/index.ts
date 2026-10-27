@@ -6,6 +6,7 @@ import { LocksController } from '../controllers/locksController';
 import { AdminController } from '../controllers/adminController';
 import { authenticateJwt, requireAdmin } from '../middlewares/authMiddleware';
 import { validateIIN } from '../utils/iinValidator';
+import playProposalsRouter from './playProposals';
 
 const router = Router();
 
@@ -93,5 +94,8 @@ router.get('/admin/bans', AdminController.getBansList as any);
 router.get('/admin/users', AdminController.getUsersList as any);
 router.post('/admin/users/:userId/ban', AdminController.banUser as any);
 router.post('/admin/users/:userId/unban', AdminController.unbanUser as any);
+
+// --- Сыграем: Play Proposals ---
+router.use('/play-proposals', playProposalsRouter);
 
 export default router;

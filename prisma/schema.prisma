@@ -29,6 +29,11 @@ model User {
   userBans       UserBan[]
   reviews        Review[]
 
+  // Сыграем
+  organizedProposals   PlayProposal[]        @relation("OrganizedProposals")
+  proposalParticipants ProposalParticipant[] @relation("ProposalParticipants")
+  proposalMessages     ProposalMessage[]     @relation("SentProposalMessages")
+
   @@map("users")
 }
 
@@ -202,4 +207,68 @@ model UserBan {
   @@map("user_bans")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// СЫГРАЕМ — Агрегатор предложений совместных игр
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PlayProposal {
+  id               String   @id @default(uuid())
+  organizer_id     String
+  organizer        User     @relation("OrganizedProposals", fields: [organizer_id], references: [id], onDelete: Cascade)
+
+  sport_type       String   // 'football' | 'basketball' | 'volleyball'
+  event_date       String   // 'YYYY-MM-DD'
+  start_time       String   // 'HH:mm'
+  end_time         String?  // 'HH:mm' (optional)
+  location_text    String   // Свободный адрес (max 200 chars)
+  latitude         Float
+  longitude        Float
+  comment          String?  // Описание (max 500 chars)
+  max_participants Int      // 2–50, включая организатора
+  status           String   @default("open")
+                            // 'open' | 'in_progress' | 'completed' | 'cancelled'
+
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  participants     ProposalParticipant[]
+  messages         ProposalMessage[]
+
+  @@index([event_date, status])
+  @@index([sport_type, status])
+  @@index([organizer_id])
+  @@map("play_proposals")
+}
+
+model ProposalParticipant {
+  id          String       @id @default(uuid())
+  proposal_id String
+  proposal    PlayProposal @relation(fields: [proposal_id], references: [id], onDelete: Cascade)
+  user_id     String
+  user        User         @relation("ProposalParticipants", fields: [user_id], references: [id], onDelete: Cascade)
+
+  status      String       @default("PENDING")
+              // 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN' | 'REMOVED'
+
+  created_at  DateTime     @default(now())
+  updated_at  DateTime     @updatedAt
+
+  @@unique([proposal_id, user_id])
+  @@index([proposal_id, status])
+  @@map("proposal_participants")
+}
+
+model ProposalMessage {
+  id          String       @id @default(uuid())
+  proposal_id String
+  proposal    PlayProposal @relation(fields: [proposal_id], references: [id], onDelete: Cascade)
+  sender_id   String
+  sender      User         @relation("SentProposalMessages", fields: [sender_id], references: [id], onDelete: Cascade)
+
+  text        String       // max 1000 chars
+  created_at  DateTime     @default(now())
+
+  @@index([proposal_id, created_at])
+  @@map("proposal_messages")
+}
 
