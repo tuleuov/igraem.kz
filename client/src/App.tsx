@@ -15,6 +15,7 @@ import { BottomNav } from './components/BottomNav';
 import { VenueClosedModal } from './components/VenueClosedModal';
 import { UnlockLoadingScreen } from './components/UnlockLoadingScreen';
 import { BannedUserScreen } from './components/BannedUserScreen';
+import { SygrayemTab } from './components/SygrayemTab';
 
 import { CityName, SportType, Venue, TimeSlot, Booking, ActiveTab, MyRequestItem, VenueIncomingRequests } from './types';
 import { INITIAL_VENUES } from './data/venuesData';
@@ -665,6 +666,12 @@ export const App: React.FC = () => {
               bookings={bookings}
               onBanUserDemo={() => setIsBanned(true)}
             />
+          </div>
+        )}
+
+        {activeTab === 'sygrayem' && (
+          <div key="tab-sygrayem" className="flex-1 flex flex-col min-h-0 overflow-hidden animate-tab-view">
+            <SygrayemTab currentUserId={userProfile?.id} />
           </div>
         )}
       </main>

@@ -45,7 +45,7 @@ export interface Booking {
   isParticipant?: boolean;
 }
 
-export type ActiveTab = 'map' | 'bookings' | 'requests' | 'favorites' | 'profile';
+export type ActiveTab = 'map' | 'bookings' | 'requests' | 'favorites' | 'profile' | 'sygrayem';
 
 export type MyRequestStatus = 'pending' | 'confirmed' | 'declined';
 export type IncomingRequestStatus = 'pending' | 'accepted' | 'declined';

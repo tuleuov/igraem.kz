@@ -1,5 +1,5 @@
 import React from 'react';
-import { Map, FileText, MessageSquare, Heart, User } from 'lucide-react';
+import { Map, FileText, MessageSquare, Heart, User, Swords } from 'lucide-react';
 import { ActiveTab } from '../types';
 import { Language, translations } from '../i18n/translations';
 
@@ -25,8 +25,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const tabs = [
     { id: 'map' as ActiveTab, label: t.navMap, icon: Map, animationClass: 'animate-spring-pop' },
     { id: 'bookings' as ActiveTab, label: t.navBookings, icon: FileText, badge: bookingsCount, animationClass: 'animate-spring-pop' },
+    { id: 'sygrayem' as ActiveTab, label: 'Сыграем', icon: Swords, animationClass: 'animate-spring-pop' },
     { id: 'requests' as ActiveTab, label: t.navRequests, icon: MessageSquare, badge: requestsCount, animationClass: 'animate-spring-pop' },
-    { id: 'favorites' as ActiveTab, label: t.navFavorites, icon: Heart, animationClass: 'animate-heartbeat' },
     { id: 'profile' as ActiveTab, label: t.navProfile, icon: User, animationClass: 'animate-spring-pop' },
   ];
 
