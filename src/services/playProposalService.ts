@@ -501,6 +501,15 @@ export const PlayProposalService = {
       });
     }
 
+    // Trigger Notification
+    try {
+      const { NotificationService } = require('./notificationService');
+      const applicant = await prisma.user.findUnique({ where: { id: userId }, select: { full_name: true } });
+      await NotificationService.notifyProposalJoin(proposal.organizer_id, applicant?.full_name || 'Игрок', proposalId);
+    } catch (e: any) {
+      console.warn('[PlayProposalService] Failed to send notification:', e.message);
+    }
+
     return { participant_id: participant.id, status: participant.status };
   },
 
@@ -542,6 +551,18 @@ export const PlayProposalService = {
       where: { id: participantId },
       data: { status },
     });
+
+    // Notify applicant about decision
+    try {
+      const { NotificationService } = require('./notificationService');
+      if (status === 'APPROVED') {
+        await NotificationService.notifyProposalApproved(participant.user_id, proposal.sport_type, proposalId);
+      } else {
+        await NotificationService.notifyProposalRejected(participant.user_id, proposal.sport_type, proposalId);
+      }
+    } catch (e: any) {
+      console.warn('[PlayProposalService] Failed to send response notification:', e.message);
+    }
 
     return { participant_id: updated.id, status: updated.status };
   },
@@ -670,7 +691,7 @@ export const PlayProposalService = {
       include: { sender: { select: { id: true, full_name: true, avatar_url: true } } },
     });
 
-    return {
+    const result = {
       id: message.id,
       sender: {
         id: message.sender.id,
@@ -680,6 +701,19 @@ export const PlayProposalService = {
       text: message.text,
       created_at: message.created_at,
     };
+
+    // Broadcast via WebSocket
+    try {
+      const { WebSocketService } = require('./websocketService');
+      WebSocketService.broadcastToProposal(proposalId, {
+        event: 'new_message',
+        data: result,
+      });
+    } catch (e: any) {
+      console.warn('[PlayProposalService] Failed to broadcast WebSocket event:', e.message);
+    }
+
+    return result;
   },
 
   // ── Мои заявки ────────────────────────────────────────────────────────────

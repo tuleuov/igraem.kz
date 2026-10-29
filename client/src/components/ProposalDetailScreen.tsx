@@ -290,17 +290,68 @@ export const ProposalDetailScreen: React.FC<ProposalDetailScreenProps> = ({
 
   useEffect(() => { load(); }, [load]);
 
-  // Poll chat every 5s when on chat tab
+  // WebSocket connection for real-time chat with polling fallback
   useEffect(() => {
     if (activeTab !== 'chat' || !proposal) return;
+
+    let ws: WebSocket | null = null;
+    const token = localStorage.getItem('token');
+
+    if (token) {
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/play-proposals/${proposalId}/chat?token=${token}`;
+        ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event) => {
+          try {
+            const parsed = JSON.parse(event.data);
+            if (parsed.event === 'new_message' && parsed.data) {
+              setProposal((prev) => {
+                if (!prev) return prev;
+                // Avoid duplicates
+                if (prev.messages.some((m) => m.id === parsed.data.id)) return prev;
+                return {
+                  ...prev,
+                  messages: [...prev.messages, parsed.data],
+                };
+              });
+            }
+          } catch (e) {
+            console.warn('[WS message error]:', e);
+          }
+        };
+
+        ws.onerror = (e) => {
+          console.warn('[WS error, will fallback to polling]:', e);
+        };
+      } catch (err) {
+        console.warn('[WS setup failed]:', err);
+      }
+    }
+
+    // Polling fallback every 5s
     const interval = setInterval(async () => {
       try {
         const res = await playProposalsApi.getById(proposalId);
-        setProposal(res.data);
+        setProposal((prev) => {
+          if (!prev) return res.data;
+          return {
+            ...res.data,
+            // Keep messages updated smoothly
+            messages: res.data.messages,
+          };
+        });
       } catch { /* silent */ }
     }, 5000);
-    return () => clearInterval(interval);
-  }, [activeTab, proposalId, proposal]);
+
+    return () => {
+      clearInterval(interval);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
+  }, [activeTab, proposalId, proposal?.id]);
 
   const showAction = (msg: string) => {
     setActionMsg(msg);

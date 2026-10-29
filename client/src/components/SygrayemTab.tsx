@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import L from 'leaflet';
 import { Plus, List, Map as MapIcon, SlidersHorizontal, X, Loader2, RefreshCw } from 'lucide-react';
 import {
   playProposalsApi,
@@ -123,10 +124,7 @@ const ProposalFilterBar: React.FC<FilterBarProps> = ({ filters, onChange }) => {
   );
 };
 
-// ─── Map View (простая карта через iframe / placeholder) ─────────────────────
-// Для MVP показываем список точек в виде grid, т.к. полноценная карта
-// требует ключа Mapbox/Yandex. Маркеры кликабельны.
-
+// ─── Real Leaflet Map View ────────────────────────────────────────────────────
 interface MapViewProps {
   points: ProposalMapPoint[];
   onSelectPoint: (id: string) => void;
@@ -134,87 +132,119 @@ interface MapViewProps {
 }
 
 const ProposalMapView: React.FC<MapViewProps> = ({ points, onSelectPoint, loading }) => {
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#00B050] animate-spin" />
-      </div>
-    );
-  }
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<Record<string, L.Marker>>({});
 
-  if (points.length === 0) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-        <span className="text-5xl mb-3">🗺️</span>
-        <p className="font-bold text-slate-700">Нет заявок на карте</p>
-        <p className="text-sm text-slate-500 mt-1">Попробуй изменить фильтры или выбрать другую дату</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    if (!mapRef.current) {
+      // Default to Kazakhstan center (Temirtau/Karaganda/Astana region)
+      const map = L.map(containerRef.current, {
+        center: [50.060371, 72.993374],
+        zoom: 12,
+        zoomControl: false,
+        attributionControl: false,
+      });
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd',
+      }).addTo(map);
+
+      mapRef.current = map;
+
+      setTimeout(() => {
+        if (mapRef.current) {
+          mapRef.current.invalidateSize();
+        }
+      }, 200);
+    }
+
+    const handleResize = () => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update markers when points change
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Remove old markers
+    Object.values(markersRef.current).forEach((m) => m.remove());
+    markersRef.current = {};
+
+    if (points.length === 0) return;
+
+    const bounds = L.latLngBounds([]);
+
+    points.forEach((p) => {
+      if (!p.latitude || !p.longitude) return;
+
+      const emoji = p.sport_type === 'football' ? '⚽' : p.sport_type === 'basketball' ? '🏀' : '🏐';
+      const bgColor = p.status === 'open' ? '#00B050' : '#EA580C';
+
+      const pinHtml = `
+        <div style="
+          width: 38px;
+          height: 38px;
+          background: ${bgColor};
+          border: 2px solid #FFFFFF;
+          border-radius: 50%;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          line-height: 1;
+          cursor: pointer;
+        ">${emoji}</div>
+      `;
+
+      const customIcon = L.divIcon({
+        html: pinHtml,
+        className: 'custom-leaflet-proposal-icon',
+        iconSize: [38, 38],
+        iconAnchor: [19, 19],
+      });
+
+      const marker = L.marker([p.latitude, p.longitude], { icon: customIcon }).addTo(mapRef.current!);
+      marker.bindTooltip(`
+        <div style="font-weight: 700; font-size: 11px;">${SPORT_LABEL[p.sport_type]} · ${p.start_time}</div>
+        <div style="font-size: 10px; color: #64748B;">${p.approved_count + 1}/${p.max_participants} участников</div>
+      `, { direction: 'top', offset: [0, -10] });
+
+      marker.on('click', () => onSelectPoint(p.id));
+      markersRef.current[p.id] = marker;
+      bounds.extend([p.latitude, p.longitude]);
+    });
+
+    if (bounds.isValid()) {
+      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+    }
+  }, [points, onSelectPoint]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 pt-4 pb-24">
-      {/* Map placeholder banner */}
-      <div className="rounded-2xl overflow-hidden bg-slate-200 h-40 mb-4 relative flex items-center justify-center border border-slate-200">
-        <div className="text-center">
-          <MapIcon className="w-8 h-8 text-slate-400 mx-auto mb-1" />
-          <p className="text-xs text-slate-500 font-medium">
-            Карта ({points.length} точек)
-          </p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Интерактивная карта — следующая итерация</p>
+    <div className="relative w-full flex-1 flex flex-col min-h-[300px] overflow-hidden">
+      {loading && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full shadow-md flex items-center gap-2 text-xs font-semibold text-slate-700">
+          <Loader2 className="w-3.5 h-3.5 text-[#00B050] animate-spin" />
+          Загрузка точек...
         </div>
-        {/* Scatter some emoji "markers" as decorative visual */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          {points.slice(0, 6).map((p, i) => (
-            <span
-              key={p.id}
-              className="absolute text-xl"
-              style={{
-                left: `${15 + (i % 3) * 30}%`,
-                top: `${20 + Math.floor(i / 3) * 45}%`,
-              }}
-            >
-              {p.sport_type === 'football' ? '⚽' : p.sport_type === 'basketball' ? '🏀' : '🏐'}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* List of points as cards */}
-      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-        Все заявки · {points.length}
-      </p>
-      <div className="grid grid-cols-1 gap-2">
-        {points.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onSelectPoint(p.id)}
-            className="w-full flex items-center gap-3 bg-white rounded-2xl border border-slate-200/80 px-4 py-3 text-left active:scale-[0.98] transition-all hover:border-[#00B050]/30"
-          >
-            <span className="text-2xl shrink-0">
-              {p.sport_type === 'football' ? '⚽' : p.sport_type === 'basketball' ? '🏀' : '🏐'}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-sm text-slate-900">
-                {SPORT_LABEL[p.sport_type]}
-              </p>
-              <p className="text-xs text-slate-500">
-                {p.start_time} · {p.approved_count + 1}/{p.max_participants} чел.
-              </p>
-            </div>
-            <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
-                p.status === 'open'
-                  ? 'bg-[#E8F8F0] text-[#00B050] border-[#00B050]/20'
-                  : 'bg-orange-50 text-orange-600 border-orange-200'
-              }`}
-            >
-              {p.status === 'open' ? 'Набор' : 'Идёт'}
-            </span>
-          </button>
-        ))}
-      </div>
+      )}
+      <div ref={containerRef} className="w-full h-full flex-1 min-h-[300px]" />
     </div>
   );
 };
