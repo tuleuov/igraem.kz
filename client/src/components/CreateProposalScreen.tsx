@@ -1,11 +1,12 @@
-import React, { useState, useCallback } from 'react';
-import { X, MapPin, Crosshair, ChevronDown, Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, MapPin, Loader2, Navigation } from 'lucide-react';
 import {
   playProposalsApi,
   CreateProposalDTO,
   ProposalSportType,
 } from '../services/playProposalsApi';
 import { SPORT_EMOJI, SPORT_LABEL } from './ProposalCard';
+import { LocationPickerModal } from './LocationPickerModal';
 
 interface CreateProposalScreenProps {
   onClose: () => void;
@@ -32,27 +33,8 @@ export const CreateProposalScreen: React.FC<CreateProposalScreenProps> = ({
   const [comment, setComment] = useState('');
   const [maxParticipants, setMaxParticipants] = useState(10);
   const [loading, setLoading] = useState(false);
-  const [locating, setLocating] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handleGeolocate = useCallback(() => {
-    if (!navigator.geolocation) {
-      setError('Геолокация не поддерживается браузером');
-      return;
-    }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLat(parseFloat(pos.coords.latitude.toFixed(6)));
-        setLng(parseFloat(pos.coords.longitude.toFixed(6)));
-        setLocating(false);
-      },
-      () => {
-        setError('Не удалось получить геолокацию. Введите координаты вручную.');
-        setLocating(false);
-      }
-    );
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,12 +44,8 @@ export const CreateProposalScreen: React.FC<CreateProposalScreenProps> = ({
       setError('Укажите время начала');
       return;
     }
-    if (!locationText.trim() || locationText.trim().length < 5) {
-      setError('Адрес места слишком короткий (минимум 5 символов)');
-      return;
-    }
-    if (lat === '' || lng === '') {
-      setError('Укажите координаты места (используйте кнопку геолокации)');
+    if (!locationText.trim() || locationText.trim().length < 5 || lat === '' || lng === '') {
+      setError('Пожалуйста, выберите место проведения на карте');
       return;
     }
 
@@ -180,42 +158,50 @@ export const CreateProposalScreen: React.FC<CreateProposalScreenProps> = ({
           </div>
         </div>
 
-        {/* Location */}
+        {/* Location Selection */}
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Место</label>
-          <div className="space-y-2">
-            <input
-              type="text"
-              value={locationText}
-              onChange={(e) => setLocationText(e.target.value)}
-              placeholder="ул. Абая 12, Алматы, возле школы №5"
-              maxLength={200}
-              required
-              className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00B050] focus:ring-1 focus:ring-[#00B050]/20"
-            />
-            {/* Geo-координаты */}
-            <div className="flex gap-2">
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            Место проведения <span className="text-red-400">*</span>
+          </label>
+
+          {locationText && lat !== '' && lng !== '' ? (
+            <div className="space-y-2">
+              {/* Readonly Address Input */}
+              <div className="relative flex items-center">
+                <div className="absolute left-4 text-[#00B050] pointer-events-none">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <input
+                  type="text"
+                  readOnly
+                  value={locationText}
+                  className="w-full bg-slate-100/90 border border-slate-200/90 rounded-2xl pl-12 pr-4 py-3.5 text-sm text-slate-900 font-semibold cursor-default focus:outline-none"
+                />
+              </div>
+
+              {/* Ghost button to change location */}
               <button
                 type="button"
-                onClick={handleGeolocate}
-                disabled={locating}
-                className="flex items-center gap-2 bg-[#E8F8F0] text-[#00B050] border border-[#00B050]/20 rounded-2xl px-4 py-2.5 text-xs font-bold hover:bg-[#d5f5e3] active:scale-95 transition-all disabled:opacity-60"
+                onClick={() => setShowLocationPicker(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-[#00B050] hover:bg-[#E8F8F0] active:scale-95 transition-all"
               >
-                {locating ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Crosshair className="w-3.5 h-3.5" />
-                )}
-                {locating ? 'Определяю…' : 'Моё местоположение'}
+                <MapPin className="w-3.5 h-3.5" />
+                <span>Изменить место</span>
               </button>
-              {lat !== '' && lng !== '' && (
-                <span className="flex items-center gap-1 text-xs text-slate-500 bg-slate-100 px-3 rounded-2xl">
-                  <MapPin className="w-3 h-3" />
-                  {Number(lat).toFixed(4)}, {Number(lng).toFixed(4)}
-                </span>
-              )}
             </div>
-          </div>
+          ) : (
+            <div>
+              {/* Initial Action Button to Pick Location */}
+              <button
+                type="button"
+                onClick={() => setShowLocationPicker(true)}
+                className="w-full bg-[#E8F8F0] hover:bg-[#d5f5e3] border border-[#00B050]/30 rounded-2xl py-3.5 px-4 flex items-center justify-center gap-2 text-sm font-bold text-[#00B050] shadow-xs active:scale-[0.98] transition-all"
+              >
+                <MapPin className="w-4 h-4 stroke-[2.5]" />
+                <span>Указать место</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Max participants */}
@@ -285,6 +271,22 @@ export const CreateProposalScreen: React.FC<CreateProposalScreenProps> = ({
           )}
         </button>
       </div>
+
+      {/* Fullscreen Location Picker Modal */}
+      {showLocationPicker && (
+        <LocationPickerModal
+          initialLat={lat}
+          initialLng={lng}
+          initialAddress={locationText}
+          onClose={() => setShowLocationPicker(false)}
+          onSelect={({ address, lat: selectedLat, lng: selectedLng }) => {
+            setLocationText(address);
+            setLat(selectedLat);
+            setLng(selectedLng);
+            setError(null);
+          }}
+        />
+      )}
     </div>
   );
 };
