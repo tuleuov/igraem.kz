@@ -131,22 +131,34 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
     setLoading(true);
 
     try {
+      // 1. Try real backend login first
+      const normalizedPhone = fullFormattedPhone.replace(/[^\d+]/g, '');
+      const loginRes = await api.login(normalizedPhone, 'password123');
+
+      if (loginRes.data?.user && loginRes.data?.token) {
+        onSuccess(loginRes.data.user);
+        return;
+      }
+    } catch (loginErr: any) {
+      // Not registered yet or password mismatch -> proceed to profile registration
+      console.log('[AuthScreen] User not found or login failed, moving to profile registration');
+    }
+
+    try {
       // Check if phone number is registered in DB or demo list
       const isRegistered = !isForceNewUser && REGISTERED_PHONES.includes(fullFormattedPhone);
 
       if (isRegistered) {
-        // Registered user -> Direct Login!
-        onSuccess({
-          id: 'u-existing-1',
-          full_name: 'Матвей Матвеев',
-          phone_number: fullFormattedPhone,
-          iin: '990101300123',
-          role: 'USER',
-        });
-      } else {
-        // Unregistered new user -> Proceed to Step 3 (Personal Info Profile Registration)
-        setStep('profile');
+        // Try demo fallback registration/login to guarantee valid JWT
+        const fallbackRes = await api.login('+77715269538', 'password123');
+        if (fallbackRes.data?.user) {
+          onSuccess(fallbackRes.data.user);
+          return;
+        }
       }
+
+      // Unregistered new user -> Proceed to Step 3 (Personal Info Profile Registration)
+      setStep('profile');
     } catch (err: any) {
       setStep('profile');
     } finally {
@@ -170,6 +182,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
     setLoading(true);
 
     try {
+      const normalizedPhone = fullFormattedPhone.replace(/[^\d+]/g, '');
+      const regRes = await api.register({
+        iin: iin.trim(),
+        phone: normalizedPhone,
+        full_name: fullName.trim(),
+        password: 'password123',
+      });
+
+      if (regRes.data?.user) {
+        onSuccess(regRes.data.user);
+        return;
+      }
+
       const newUser: UserProfile = {
         id: `u-new-${Math.floor(1000 + Math.random() * 9000)}`,
         full_name: fullName.trim(),
@@ -179,7 +204,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
       };
       onSuccess(newUser);
     } catch (err: any) {
-      setErrorMsg('Ошибка регистрации профиля');
+      console.warn('[AuthScreen] Registration error:', err);
+      setErrorMsg(err.message || 'Ошибка регистрации профиля');
     } finally {
       setLoading(false);
     }

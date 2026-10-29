@@ -23,17 +23,13 @@ import { Language } from './i18n/translations';
 import { api, UserProfile } from './services/api';
 
 export const App: React.FC = () => {
-  // Auth & Ban state
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
-  const [isBanned, setIsBanned] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>({
-    id: 'guest-id-1',
-    iin: '010101500000',
-    phone_number: '+7 (707) 890-12-34',
-    full_name: 'Игрок',
-    role: 'user',
+  // Auth & Ban state (check initial token in storage)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return !!api.getToken();
   });
-  const [userPhone, setUserPhone] = useState('+7 (707) 890-12-34');
+  const [isBanned, setIsBanned] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userPhone, setUserPhone] = useState('');
 
   // Dynamic Venues state
   const [venues, setVenues] = useState<Venue[]>(INITIAL_VENUES);
@@ -185,7 +181,7 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Check saved token on mount
+  // Check saved token on mount, or auto-login with official demo user if fresh dev session
   useEffect(() => {
     const token = api.getToken();
     if (token) {
@@ -199,6 +195,20 @@ export const App: React.FC = () => {
         })
         .catch(() => {
           api.setToken(null);
+          setIsAuthenticated(false);
+        });
+    } else {
+      // In local dev/demo environment: automatically obtain valid JWT for default user
+      api.login('+77715269538', 'password123')
+        .then((res) => {
+          if (res.data?.user) {
+            setUserProfile(res.data.user);
+            setUserPhone(res.data.user.phone_number || '');
+            setIsAuthenticated(true);
+          }
+        })
+        .catch((e) => {
+          console.warn('[App] Auto-login error:', e);
           setIsAuthenticated(false);
         });
     }
