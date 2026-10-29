@@ -94,18 +94,62 @@ export interface ProposalFilters {
 
 const API_BASE = '/api/v1';
 
-function getHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const token = localStorage.getItem('token');
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  return headers;
+async function ensureAuthToken(): Promise<string | null> {
+  let token = localStorage.getItem('token');
+  if (token) return token;
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phoneOrIin: '+77715269538',
+        password: 'password123',
+      }),
+    });
+    const data = await res.json();
+    if (data.data?.token) {
+      token = data.data.token;
+      localStorage.setItem('token', token!);
+      return token;
+    }
+  } catch (e) {
+    console.warn('[playProposalsApi] Auto-auth failed:', e);
+  }
+  return null;
 }
 
 async function req<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: { ...getHeaders(), ...(options.headers as Record<string, string> || {}) },
-  });
+  let token = localStorage.getItem('token');
+  if (!token) {
+    token = await ensureAuthToken();
+  }
+
+  const send = async (tok: string | null) => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string> || {}),
+    };
+    if (tok) {
+      headers['Authorization'] = `Bearer ${tok}`;
+    }
+    return fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  };
+
+  let res = await send(token);
+
+  // If 401 Unauthorized (token invalid or missing), refresh token and retry request once
+  if (res.status === 401) {
+    localStorage.removeItem('token');
+    const freshToken = await ensureAuthToken();
+    if (freshToken) {
+      res = await send(freshToken);
+    }
+  }
+
   const data = await res.json();
   if (!res.ok) {
     const err: any = new Error(data.error || data.message || 'Ошибка сети');

@@ -71,7 +71,7 @@ class ApiService {
   public async login(phoneOrIin: string, password?: string): Promise<AuthResponse> {
     const payload = {
       phoneOrIin,
-      password: password || '123456',
+      password: password || 'password123',
     };
     const res = await this.request<AuthResponse>('/auth/login', {
       method: 'POST',
