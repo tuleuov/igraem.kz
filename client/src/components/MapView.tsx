@@ -100,10 +100,10 @@ export const MapView: React.FC<MapViewProps> = ({
         attributionControl: false,
       });
 
-      // Light vector map tiles
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      // OpenStreetMap tiles (no API key required, reliable worldwide)
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        subdomains: 'abcd',
+        attribution: '&copy; OpenStreetMap contributors',
       }).addTo(map);
 
       mapRef.current = map;
